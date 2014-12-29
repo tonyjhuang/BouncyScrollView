@@ -1,14 +1,17 @@
 package com.tonyjhuang.bouncyscrollview;
 
+import android.animation.Animator;
 import android.animation.ObjectAnimator;
 import android.content.Context;
 import android.content.res.TypedArray;
+import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.AccelerateInterpolator;
+import android.view.animation.Animation;
 import android.view.animation.Interpolator;
 import android.view.animation.OvershootInterpolator;
 import android.widget.FrameLayout;
@@ -48,7 +51,7 @@ public class BouncyScrollView extends ScrollView {
      * entirely off? The threshold is the percentage of the view you want scrolled off before we
      * take control of it. Note: we will never auto-scroll the view as long as the user is touching
      * it.
-     *
+     * <p/>
      * Setting it to 0f is effectively turning off scrollAssist whereas setting it to 1f will scroll
      * the view as long as it touches the edge of the screen. Finally, 0.5f will scroll the view if
      * at least half of it is scrolled offscreen.
@@ -117,6 +120,12 @@ public class BouncyScrollView extends ScrollView {
         viewAnimator = ObjectAnimator.ofInt(this, "scrollY", 1, absoluteStartingPosition);
         viewAnimator.setInterpolator(viewAnimationInterpolator);
         viewAnimator.setDuration(viewAnimationDuration);
+        viewAnimator.addListener(new SimpleAnimationListener() {
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                onScrollStopListener.setPause(false);
+            }
+        });
     }
 
     /**
@@ -207,15 +216,16 @@ public class BouncyScrollView extends ScrollView {
         lastT = t;
         lastOldT = oldt;
 
-        onScrollStopListener.onScrollChanged(l, t, oldl, oldt);
         if (eventListener != null) eventListener.onScrollChanged(this, l, t, oldl, oldt);
 
+        Log.d(TAG, "t: " + t + ", oldt: " + oldt);
+
         if (t == 0) {
-            resetPosition();
             if (eventListener != null) eventListener.onViewHitBottom(customView);
         } else if (t == getMaxScrollHeight()) {
-            resetPosition();
             if (eventListener != null) eventListener.onViewHitTop(customView);
+        } else {
+            onScrollStopListener.onScrollChanged(l, t, oldl, oldt);
         }
     }
 
@@ -230,12 +240,18 @@ public class BouncyScrollView extends ScrollView {
     }
 
     public void resetPosition() {
+        Log.d(TAG, "resetPosition");
         viewContainer.scrollTo(0, 1);
     }
 
     public void animateToStartingPosition() {
-        resetPosition();
-        viewAnimator.start();
+        onScrollStopListener.setPause(true);
+        new Handler().post(new Runnable() {
+            @Override
+            public void run() {
+                viewAnimator.start();
+            }
+        });
     }
 
     private int getMaxScrollHeight() {
@@ -259,6 +275,7 @@ public class BouncyScrollView extends ScrollView {
 
         //
         if (scrollY <= bottomThreshold) { // Should scroll down
+            Log.d(TAG, "scrolling offscreen");
             scrollDownOffscreen();
         } else if (scrollY >= topThreshold) { // Should scroll up
             scrollUpOffscreen();
@@ -347,10 +364,15 @@ public class BouncyScrollView extends ScrollView {
         return customView;
     }
 
-    public void setCustomView(View customView) {
+    public void setCustomView(final View customView) {
         this.customView = customView;
-        viewContainer.removeAllViews();
-        viewContainer.addView(customView);
+        viewContainer.post(new Runnable() {
+            @Override
+            public void run() {
+                viewContainer.removeAllViews();
+                viewContainer.addView(customView);
+            }
+        });
     }
 
     public EventListener getEventListener() {
@@ -381,6 +403,11 @@ public class BouncyScrollView extends ScrollView {
          */
         private boolean userFingerDown = false;
 
+        /**
+         * Stop operations! Why? I was getting issues with onScrollStop events being called
+         * when setting a new custom view or animating the view to starting position. So that's why.
+         */
+        private boolean pause = false;
 
         /**
          * Runnable to compare the current to past scroll states.
@@ -431,6 +458,10 @@ public class BouncyScrollView extends ScrollView {
             }
         }
 
+        public void setPause(boolean pause) {
+            this.pause = pause;
+        }
+
         /**
          * Check for scroll stoppage again in the future.
          */
@@ -440,8 +471,23 @@ public class BouncyScrollView extends ScrollView {
         }
 
         private void onScrollStopped() {
-            if (scrollAssist)
+            Log.d(TAG, "onScrollStopped");
+            if (scrollAssist && !pause)
                 scrollOffScreenIfNecessary();
         }
+    }
+
+    private static class SimpleAnimationListener implements Animator.AnimatorListener{
+        @Override
+        public void onAnimationStart(Animator animation) {}
+
+        @Override
+        public void onAnimationEnd(Animator animation) {}
+
+        @Override
+        public void onAnimationCancel(Animator animation) {}
+
+        @Override
+        public void onAnimationRepeat(Animator animation) {}
     }
 }
