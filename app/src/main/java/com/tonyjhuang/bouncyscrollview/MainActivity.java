@@ -1,6 +1,7 @@
 package com.tonyjhuang.bouncyscrollview;
 
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
 import android.view.View;
@@ -29,7 +30,7 @@ public class MainActivity extends ActionBarActivity implements BouncyScrollView.
 
         bouncyScrollView = (BouncyScrollView) findViewById(R.id.scrollview);
         bouncyScrollView.setEventListener(this);
-        setNewView();
+        setNewView(false);
 
         bouncyScrollView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
@@ -39,23 +40,29 @@ public class MainActivity extends ActionBarActivity implements BouncyScrollView.
         });
     }
 
-    private void setNewView() {
-        bouncyScrollView.setCustomView(flip ? progressBar : textView);
+    private void setNewView(boolean animate) {
+        bouncyScrollView.setCustomView(flip ? progressBar : textView, animate);
+        bouncyScrollView.setScrollable(!flip);
+        if(flip)
+            new Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    setNewView(true);
+                }
+            }, 2000);
         flip = !flip;
     }
 
     @Override
     public void onViewHitBottom(View view) {
         Log.d(TAG, "onViewHitBottom");
-        setNewView();
-        bouncyScrollView.animateToStartingPosition();
+        setNewView(false);
     }
 
     @Override
     public void onViewHitTop(View view) {
         Log.d(TAG, "onViewHitTop");
-        setNewView();
-        bouncyScrollView.animateToStartingPosition();
+        setNewView(false);
     }
 
     @Override

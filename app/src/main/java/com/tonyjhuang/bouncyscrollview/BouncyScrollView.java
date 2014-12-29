@@ -11,7 +11,6 @@ import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.AccelerateInterpolator;
-import android.view.animation.Animation;
 import android.view.animation.Interpolator;
 import android.view.animation.OvershootInterpolator;
 import android.widget.FrameLayout;
@@ -26,11 +25,9 @@ public class BouncyScrollView extends ScrollView {
 
     private final String TAG = getClass().getSimpleName();
 
-    private LinearLayout container;
     private FrameLayout viewContainer;
     private Space topSpacer;
     private Space bottomSpacer;
-
     private View customView;
 
     private ObjectAnimator viewAnimator;
@@ -42,6 +39,8 @@ public class BouncyScrollView extends ScrollView {
 
     private boolean isDraggingOutside = false;
     private boolean isDraggingInside = false;
+
+    private boolean scrollable;
 
     private EventListener eventListener;
     private OnScrollStopListener onScrollStopListener = new OnScrollStopListener();
@@ -74,7 +73,6 @@ public class BouncyScrollView extends ScrollView {
         inflate(context, R.layout.view_bouncy_scrollview, this);
         setOverScrollMode(OVER_SCROLL_NEVER);
 
-        container = (LinearLayout) findViewById(R.id.container);
         viewContainer = (FrameLayout) findViewById(R.id.view_container);
         topSpacer = (Space) findViewById(R.id.top_spacer);
         bottomSpacer = (Space) findViewById(R.id.bottom_spacer);
@@ -86,6 +84,7 @@ public class BouncyScrollView extends ScrollView {
         scrollAssist = attributes.getBoolean(R.styleable.BouncyScrollView_scroll_assist, false);
         scrollAssistDuration = attributes.getInteger(R.styleable.BouncyScrollView_scroll_assist_anim_duration, 200);
         scrollAssistThreshold = attributes.getFloat(R.styleable.BouncyScrollView_scroll_assist_threshold, 0.5f);
+        scrollable = attributes.getBoolean(R.styleable.BouncyScrollView_scrollable, true);
         attributes.recycle();
     }
 
@@ -137,6 +136,8 @@ public class BouncyScrollView extends ScrollView {
      */
     @Override
     public boolean onInterceptTouchEvent(@NonNull MotionEvent ev) {
+        if (!scrollable) return false;
+
         onScrollStopListener.onInterceptTouchEvent(ev);
         if (!isTouchingView(ev)) {
             switch (ev.getAction()) {
@@ -164,6 +165,7 @@ public class BouncyScrollView extends ScrollView {
 
     @Override
     public boolean onTouchEvent(@NonNull MotionEvent ev) {
+        if (!scrollable) return false;
         onScrollStopListener.onTouchEvent(ev);
         /**
          * Only consume the drag/scroll event if the MotionEvent is within the bounds of our view.
@@ -249,7 +251,7 @@ public class BouncyScrollView extends ScrollView {
         new Handler().post(new Runnable() {
             @Override
             public void run() {
-                viewAnimator.start();
+                if(viewAnimator != null) viewAnimator.start();
             }
         });
     }
@@ -283,23 +285,18 @@ public class BouncyScrollView extends ScrollView {
     }
 
     protected void scrollUpOffscreen() {
-        scrollToPosition(getMaxScrollHeight(), scrollAssistDuration);
+        scrollToPosition(getMaxScrollHeight(), scrollAssistDuration).start();
     }
 
     protected void scrollDownOffscreen() {
-        scrollToPosition(0, scrollAssistDuration);
+        scrollToPosition(0, scrollAssistDuration).start();
     }
 
-    protected void scrollToPosition(int position, int duration) {
+    protected ObjectAnimator scrollToPosition(int position, int duration) {
         final ObjectAnimator animator = ObjectAnimator.ofInt(this, "scrollY", getScrollY(), position);
         animator.setDuration(duration);
         animator.setInterpolator(new AccelerateInterpolator());
-        post(new Runnable() {
-            @Override
-            public void run() {
-                animator.start();
-            }
-        });
+        return animator;
     }
 
     /* Getters & Setters */
@@ -365,14 +362,39 @@ public class BouncyScrollView extends ScrollView {
     }
 
     public void setCustomView(final View customView) {
-        this.customView = customView;
-        viewContainer.post(new Runnable() {
-            @Override
-            public void run() {
-                viewContainer.removeAllViews();
-                viewContainer.addView(customView);
-            }
-        });
+        setCustomView(customView, false);
+    }
+
+    public void setCustomView(final View customView, boolean animate) {
+        setCustomView(customView, animate, 200);
+    }
+
+    public void setCustomView(final View customView, boolean animate, int duration) {
+        if (this.customView == null || !animate) {
+            resetPosition();
+            this.customView = customView;
+            viewContainer.removeAllViews();
+            viewContainer.addView(customView);
+            animateToStartingPosition();
+        } else {
+            onScrollStopListener.setPause(true);
+            ObjectAnimator scrollDown = scrollToPosition(1, duration);
+            scrollDown.addListener(new SimpleAnimationListener() {
+                @Override
+                public void onAnimationEnd(Animator animation) {
+                    setCustomView(customView);
+                }
+            });
+            scrollDown.start();
+        }
+    }
+
+    public boolean isScrollable() {
+        return scrollable;
+    }
+
+    public void setScrollable(boolean scrollable) {
+        this.scrollable = scrollable;
     }
 
     public EventListener getEventListener() {
@@ -391,7 +413,7 @@ public class BouncyScrollView extends ScrollView {
          * This Runnable is only started after the user has started scrolling.
          * 16 millis = 1 frame @ 60fps.
          */
-        private static final int DELAY = 16;
+        private static final int DELAY = 32;
 
         /**
          * The y position we received last check.
@@ -471,23 +493,26 @@ public class BouncyScrollView extends ScrollView {
         }
 
         private void onScrollStopped() {
-            Log.d(TAG, "onScrollStopped");
             if (scrollAssist && !pause)
                 scrollOffScreenIfNecessary();
         }
     }
 
-    private static class SimpleAnimationListener implements Animator.AnimatorListener{
+    private static class SimpleAnimationListener implements Animator.AnimatorListener {
         @Override
-        public void onAnimationStart(Animator animation) {}
+        public void onAnimationStart(Animator animation) {
+        }
 
         @Override
-        public void onAnimationEnd(Animator animation) {}
+        public void onAnimationEnd(Animator animation) {
+        }
 
         @Override
-        public void onAnimationCancel(Animator animation) {}
+        public void onAnimationCancel(Animator animation) {
+        }
 
         @Override
-        public void onAnimationRepeat(Animator animation) {}
+        public void onAnimationRepeat(Animator animation) {
+        }
     }
 }
