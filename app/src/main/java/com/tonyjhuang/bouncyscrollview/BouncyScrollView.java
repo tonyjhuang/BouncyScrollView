@@ -7,7 +7,6 @@ import android.content.res.TypedArray;
 import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.AccelerateInterpolator;
@@ -220,8 +219,6 @@ public class BouncyScrollView extends ScrollView {
 
         if (eventListener != null) eventListener.onScrollChanged(this, l, t, oldl, oldt);
 
-        Log.d(TAG, "t: " + t + ", oldt: " + oldt);
-
         if (t == 0) {
             if (eventListener != null) eventListener.onViewHitBottom(customView);
         } else if (t == getMaxScrollHeight()) {
@@ -242,7 +239,6 @@ public class BouncyScrollView extends ScrollView {
     }
 
     public void resetPosition() {
-        Log.d(TAG, "resetPosition");
         viewContainer.scrollTo(0, 1);
     }
 
@@ -277,7 +273,6 @@ public class BouncyScrollView extends ScrollView {
 
         //
         if (scrollY <= bottomThreshold) { // Should scroll down
-            Log.d(TAG, "scrolling offscreen");
             scrollDownOffscreen();
         } else if (scrollY >= topThreshold) { // Should scroll up
             scrollUpOffscreen();

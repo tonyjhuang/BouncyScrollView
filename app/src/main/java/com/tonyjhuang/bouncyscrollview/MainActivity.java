@@ -26,7 +26,7 @@ public class MainActivity extends ActionBarActivity implements BouncyScrollView.
 
         progressBar = new ProgressBar(this);
         textView = new TextView(this);
-        textView.setText("HELLO WORLD");
+        textView.setText("HELLO WORLD\nHELLO WORLD");
 
         bouncyScrollView = (BouncyScrollView) findViewById(R.id.scrollview);
         bouncyScrollView.setEventListener(this);
