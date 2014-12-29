@@ -3,5 +3,8 @@
     <declare-styleable name="BouncyScrollView">
         <attr name="starting_position" format="float" />
         <attr name="anim_duration" format="integer" />
+        <attr name="scroll_assist" format="boolean" />
+        <attr name="scroll_assist_anim_duration" format="integer" />
+        <attr name="scroll_assist_threshold" format="float"/>
     </declare-styleable>
 </resources>

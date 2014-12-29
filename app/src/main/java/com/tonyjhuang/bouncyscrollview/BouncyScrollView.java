@@ -8,6 +8,7 @@ import android.util.AttributeSet;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.animation.AccelerateInterpolator;
 import android.view.animation.Interpolator;
 import android.view.animation.OvershootInterpolator;
 import android.widget.FrameLayout;
@@ -40,6 +41,21 @@ public class BouncyScrollView extends ScrollView {
     private boolean isDraggingInside = false;
 
     private EventListener eventListener;
+    private OnScrollStopListener onScrollStopListener = new OnScrollStopListener();
+
+    /**
+     * Once a certain percentage of the view is off the screen, should we automatically scroll it
+     * entirely off? The threshold is the percentage of the view you want scrolled off before we
+     * take control of it. Note: we will never auto-scroll the view as long as the user is touching
+     * it.
+     *
+     * Setting it to 0f is effectively turning off scrollAssist whereas setting it to 1f will scroll
+     * the view as long as it touches the edge of the screen. Finally, 0.5f will scroll the view if
+     * at least half of it is scrolled offscreen.
+     */
+    private boolean scrollAssist;
+    private int scrollAssistDuration;
+    private float scrollAssistThreshold;
 
     public BouncyScrollView(Context context) {
         this(context, null);
@@ -53,6 +69,7 @@ public class BouncyScrollView extends ScrollView {
         super(context, attrs, defStyleAttr);
 
         inflate(context, R.layout.view_bouncy_scrollview, this);
+        setOverScrollMode(OVER_SCROLL_NEVER);
 
         container = (LinearLayout) findViewById(R.id.container);
         viewContainer = (FrameLayout) findViewById(R.id.view_container);
@@ -63,6 +80,9 @@ public class BouncyScrollView extends ScrollView {
         TypedArray attributes = context.obtainStyledAttributes(attrs, R.styleable.BouncyScrollView, defStyleAttr, 0);
         relativeStartingPosition = attributes.getFloat(R.styleable.BouncyScrollView_starting_position, 0.66f);
         viewAnimationDuration = attributes.getInteger(R.styleable.BouncyScrollView_anim_duration, 500);
+        scrollAssist = attributes.getBoolean(R.styleable.BouncyScrollView_scroll_assist, false);
+        scrollAssistDuration = attributes.getInteger(R.styleable.BouncyScrollView_scroll_assist_anim_duration, 200);
+        scrollAssistThreshold = attributes.getFloat(R.styleable.BouncyScrollView_scroll_assist_threshold, 0.5f);
         attributes.recycle();
     }
 
@@ -71,7 +91,6 @@ public class BouncyScrollView extends ScrollView {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        Log.d(TAG, "onSizeChanged. h: " + h);
         setAbsoluteStartingPosition(relativeStartingPosition, h);
         initViewAnimator();
     }
@@ -95,7 +114,6 @@ public class BouncyScrollView extends ScrollView {
     }
 
     private void initViewAnimator() {
-        Log.d(TAG, "absoluteStartingPosition: " + absoluteStartingPosition);
         viewAnimator = ObjectAnimator.ofInt(this, "scrollY", 1, absoluteStartingPosition);
         viewAnimator.setInterpolator(viewAnimationInterpolator);
         viewAnimator.setDuration(viewAnimationDuration);
@@ -109,7 +127,8 @@ public class BouncyScrollView extends ScrollView {
      * account.
      */
     @Override
-    public boolean onInterceptTouchEvent(MotionEvent ev) {
+    public boolean onInterceptTouchEvent(@NonNull MotionEvent ev) {
+        onScrollStopListener.onInterceptTouchEvent(ev);
         if (!isTouchingView(ev)) {
             switch (ev.getAction()) {
                 case MotionEvent.ACTION_DOWN:
@@ -136,6 +155,7 @@ public class BouncyScrollView extends ScrollView {
 
     @Override
     public boolean onTouchEvent(@NonNull MotionEvent ev) {
+        onScrollStopListener.onTouchEvent(ev);
         /**
          * Only consume the drag/scroll event if the MotionEvent is within the bounds of our view.
          */
@@ -182,19 +202,15 @@ public class BouncyScrollView extends ScrollView {
     @Override
     protected void onScrollChanged(int l, int t, int oldl, int oldt) {
         super.onScrollChanged(l, t, oldl, oldt);
+        if (t == lastT && oldt == lastOldT)
+            return;
+        lastT = t;
+        lastOldT = oldt;
 
-        if (getOverScrollMode() == OVER_SCROLL_NEVER) {
-            // There's a bug where the last scroll event gets repeated if overscroll is off.
-            if (t == lastT && oldt == lastOldT)
-                return;
-            lastT = t;
-            lastOldT = oldt;
-        }
-
+        onScrollStopListener.onScrollChanged(l, t, oldl, oldt);
         if (eventListener != null) eventListener.onScrollChanged(this, l, t, oldl, oldt);
 
         if (t == 0) {
-            Log.d(TAG, "hit bottom. t: " + t + ", oldt: " + oldt);
             resetPosition();
             if (eventListener != null) eventListener.onViewHitBottom(customView);
         } else if (t == getMaxScrollHeight()) {
@@ -214,21 +230,86 @@ public class BouncyScrollView extends ScrollView {
     }
 
     public void resetPosition() {
-        Log.d(TAG, "resetPosition");
         viewContainer.scrollTo(0, 1);
     }
 
     public void animateToStartingPosition() {
-        Log.d(TAG, "animateToStartingPosition");
         resetPosition();
         viewAnimator.start();
     }
 
     private int getMaxScrollHeight() {
-        return getHeight() - bottomSpacer.getHeight();
+        return topSpacer.getHeight() + (customView == null ? 0 : customView.getHeight());
+    }
+
+    /* Scroll Assist */
+
+    /**
+     * Check if our cardview is beyond the thresholds of readability (eg if either the top edge
+     * of the CardView is near the bottom edge of the screen and vice versa). If so, scroll the
+     * CardView entirely off screen.
+     */
+    private void scrollOffScreenIfNecessary() {
+        if (!scrollAssist)
+            return;
+
+        int scrollY = getScrollY();
+        int bottomThreshold = (int) ((customView == null ? 0 : customView.getHeight()) * scrollAssistThreshold);
+        int topThreshold = getHeight() - bottomThreshold;
+
+        //
+        if (scrollY <= bottomThreshold) { // Should scroll down
+            scrollDownOffscreen();
+        } else if (scrollY >= topThreshold) { // Should scroll up
+            scrollUpOffscreen();
+        }
+    }
+
+    protected void scrollUpOffscreen() {
+        scrollToPosition(getMaxScrollHeight(), scrollAssistDuration);
+    }
+
+    protected void scrollDownOffscreen() {
+        scrollToPosition(0, scrollAssistDuration);
+    }
+
+    protected void scrollToPosition(int position, int duration) {
+        final ObjectAnimator animator = ObjectAnimator.ofInt(this, "scrollY", getScrollY(), position);
+        animator.setDuration(duration);
+        animator.setInterpolator(new AccelerateInterpolator());
+        post(new Runnable() {
+            @Override
+            public void run() {
+                animator.start();
+            }
+        });
     }
 
     /* Getters & Setters */
+
+    public boolean isScrollAssist() {
+        return scrollAssist;
+    }
+
+    public void setScrollAssist(boolean scrollAssist) {
+        this.scrollAssist = scrollAssist;
+    }
+
+    public int getScrollAssistDuration() {
+        return scrollAssistDuration;
+    }
+
+    public void setScrollAssistDuration(int scrollAssistDuration) {
+        this.scrollAssistDuration = scrollAssistDuration;
+    }
+
+    public float getScrollAssistThreshold() {
+        return scrollAssistThreshold;
+    }
+
+    public void setScrollAssistThreshold(float scrollAssistThreshold) {
+        this.scrollAssistThreshold = scrollAssistThreshold;
+    }
 
     public Interpolator getInterpolator() {
         return viewAnimationInterpolator;
@@ -278,5 +359,89 @@ public class BouncyScrollView extends ScrollView {
 
     public void setEventListener(EventListener eventListener) {
         this.eventListener = eventListener;
+    }
+
+    /* Utility */
+    public class OnScrollStopListener {
+
+        /**
+         * How often we should check if the ScrollView has stopped scrolling in millis.
+         * This Runnable is only started after the user has started scrolling.
+         * 16 millis = 1 frame @ 60fps.
+         */
+        private static final int DELAY = 16;
+
+        /**
+         * The y position we received last check.
+         */
+        private int oldY = 0;
+
+        /**
+         * Does the user currently have a finger down (are they scrolling)?
+         */
+        private boolean userFingerDown = false;
+
+
+        /**
+         * Runnable to compare the current to past scroll states.
+         */
+        private Runnable checkScrollView = new Runnable() {
+            @Override
+            public void run() {
+                int y = getScrollY();
+                if (y == oldY && !userFingerDown) {
+                    onScrollStopped();
+                } else {
+                    oldY = y;
+                    postDelayedRunnableCheck(DELAY);
+                }
+            }
+        };
+
+        public void onScrollChanged(int l, int t, int oldl, int oldt) {
+            //TODO: change this to t?
+            oldY = oldt;
+            postDelayedRunnableCheck(DELAY);
+        }
+
+
+        public void onInterceptTouchEvent(MotionEvent ev) {
+            switch (ev.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    userFingerDown = true;
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                case MotionEvent.ACTION_UP:
+                    userFingerDown = false;
+                    postDelayedRunnableCheck(0);
+                    break;
+            }
+        }
+
+        public void onTouchEvent(MotionEvent ev) {
+            switch (ev.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    userFingerDown = true;
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                case MotionEvent.ACTION_UP:
+                    userFingerDown = false;
+                    postDelayedRunnableCheck(0);
+                    break;
+            }
+        }
+
+        /**
+         * Check for scroll stoppage again in the future.
+         */
+        private void postDelayedRunnableCheck(int delay) {
+            removeCallbacks(checkScrollView);
+            postDelayed(checkScrollView, delay);
+        }
+
+        private void onScrollStopped() {
+            if (scrollAssist)
+                scrollOffScreenIfNecessary();
+        }
     }
 }

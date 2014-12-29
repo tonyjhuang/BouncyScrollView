@@ -1,6 +1,9 @@
 <com.tonyjhuang.bouncyscrollview.BouncyScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:layout_width="match_parent"
     android:id="@+id/scrollview"
+    android:layout_width="match_parent"
     android:layout_height="match_parent"
+    app:scroll_assist="true"
+    app:scroll_assist_threshold="0.75"
     tools:context=".MainActivity" />

@@ -1,7 +1,6 @@
 package com.tonyjhuang.bouncyscrollview;
 
 import android.os.Bundle;
-import android.os.Handler;
 import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
 import android.view.View;
@@ -9,7 +8,7 @@ import android.view.ViewTreeObserver;
 import android.widget.ProgressBar;
 
 
-public class MainActivity extends ActionBarActivity implements BouncyScrollView.EventListener{
+public class MainActivity extends ActionBarActivity implements BouncyScrollView.EventListener {
 
     private final String TAG = getClass().getSimpleName();
 
@@ -21,31 +20,31 @@ public class MainActivity extends ActionBarActivity implements BouncyScrollView.
         setContentView(R.layout.activity_main);
 
         bouncyScrollView = (BouncyScrollView) findViewById(R.id.scrollview);
+        bouncyScrollView.setEventListener(this);
         bouncyScrollView.setCustomView(new ProgressBar(this));
 
-        new Handler().postDelayed(new Runnable() {
+        bouncyScrollView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
             @Override
-            public void run() {
-                Log.d(TAG, "running");
+            public void onGlobalLayout() {
                 bouncyScrollView.animateToStartingPosition();
             }
-        }, 1000);
+        });
     }
 
     @Override
     public void onViewHitBottom(View view) {
         Log.d(TAG, "onViewHitBottom");
+        bouncyScrollView.animateToStartingPosition();
     }
 
     @Override
     public void onViewHitTop(View view) {
         Log.d(TAG, "onViewHitTop");
-
+        bouncyScrollView.animateToStartingPosition();
     }
 
     @Override
     public void onScrollChanged(BouncyScrollView scrollView, int l, int t, int oldl, int oldt) {
-        Log.d(TAG, "onScrollChanged");
-
+        //Log.d(TAG, "onScrollChanged");
     }
 }
