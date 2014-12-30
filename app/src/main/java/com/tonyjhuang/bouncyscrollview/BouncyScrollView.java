@@ -188,7 +188,7 @@ public class BouncyScrollView extends ScrollView {
     /**
      * Does this MotionEvent land on our CardView?
      */
-    private boolean isTouchingView(MotionEvent ev) {
+    protected boolean isTouchingView(MotionEvent ev) {
         if (customView == null)
             return false;
 
