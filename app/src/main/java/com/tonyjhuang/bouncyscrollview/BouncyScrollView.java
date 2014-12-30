@@ -4,7 +4,6 @@ import android.animation.Animator;
 import android.animation.ObjectAnimator;
 import android.content.Context;
 import android.content.res.TypedArray;
-import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -253,7 +252,7 @@ public class BouncyScrollView extends ScrollView {
 
     public void animateToStartingPosition() {
         onScrollStopListener.setPause(true);
-        new Handler().post(new Runnable() {
+        post(new Runnable() {
             @Override
             public void run() {
                 if (viewAnimator != null) viewAnimator.start();
@@ -386,7 +385,7 @@ public class BouncyScrollView extends ScrollView {
         if (this.customView == null || !animate) {
             resetPosition();
             this.customView = customView;
-            new Handler().post(new Runnable() {
+            post(new Runnable() {
                 @Override
                 public void run() {
                     viewContainer.removeAllViews();
