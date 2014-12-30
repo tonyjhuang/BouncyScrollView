@@ -7,7 +7,6 @@ import android.util.Log;
 import android.view.View;
 import android.view.ViewTreeObserver;
 import android.widget.ProgressBar;
-import android.widget.TextView;
 
 
 public class MainActivity extends ActionBarActivity implements BouncyScrollView.EventListener {
@@ -17,7 +16,7 @@ public class MainActivity extends ActionBarActivity implements BouncyScrollView.
     BouncyScrollView bouncyScrollView;
     boolean flip = true;
     ProgressBar progressBar;
-    TextView textView;
+    View customView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -25,8 +24,7 @@ public class MainActivity extends ActionBarActivity implements BouncyScrollView.
         setContentView(R.layout.activity_main);
 
         progressBar = new ProgressBar(this);
-        textView = new TextView(this);
-        textView.setText("HELLO WORLD\nHELLO WORLD");
+        customView = getLayoutInflater().inflate(R.layout.test_view, null);
 
         bouncyScrollView = (BouncyScrollView) findViewById(R.id.scrollview);
         bouncyScrollView.setEventListener(this);
@@ -41,7 +39,7 @@ public class MainActivity extends ActionBarActivity implements BouncyScrollView.
     }
 
     private void setNewView(boolean animate) {
-        bouncyScrollView.setCustomView(flip ? progressBar : textView, animate);
+        bouncyScrollView.setCustomView(flip ? progressBar : customView, animate);
         bouncyScrollView.setScrollable(!flip);
         if(flip)
             new Handler().postDelayed(new Runnable() {

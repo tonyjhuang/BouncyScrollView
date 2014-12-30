@@ -7,6 +7,7 @@ import android.content.res.TypedArray;
 import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.animation.AccelerateInterpolator;
@@ -36,8 +37,8 @@ public class BouncyScrollView extends ScrollView {
     private float relativeStartingPosition;
     private int absoluteStartingPosition;
 
-    private boolean isDraggingOutside = false;
-    private boolean isDraggingInside = false;
+    protected boolean draggingOutside = false;
+    protected boolean draggingInside = false;
 
     private boolean scrollable;
 
@@ -141,21 +142,21 @@ public class BouncyScrollView extends ScrollView {
         if (!isTouchingView(ev)) {
             switch (ev.getAction()) {
                 case MotionEvent.ACTION_DOWN:
-                    isDraggingOutside = true;
+                    draggingOutside = true;
                     break;
                 case MotionEvent.ACTION_CANCEL:
                 case MotionEvent.ACTION_UP:
-                    isDraggingOutside = false;
+                    draggingOutside = false;
                     break;
             }
         } else {
             switch (ev.getAction()) {
                 case MotionEvent.ACTION_DOWN:
-                    isDraggingInside = true;
+                    draggingInside = true;
                     break;
                 case MotionEvent.ACTION_CANCEL:
                 case MotionEvent.ACTION_UP:
-                    isDraggingInside = false;
+                    draggingInside = false;
                     break;
             }
         }
@@ -170,16 +171,16 @@ public class BouncyScrollView extends ScrollView {
          * Only consume the drag/scroll event if the MotionEvent is within the bounds of our view.
          */
         int action = ev.getAction();
-        if (isDraggingInside || (isTouchingView(ev) && !isDraggingOutside)) {
+        if (draggingInside || (isTouchingView(ev) && !draggingOutside)) {
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)
-                isDraggingInside = false;
+                draggingInside = false;
             return super.onTouchEvent(ev);
         } else {
             switch (action) {
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
-                    isDraggingInside = false;
-                    isDraggingOutside = false;
+                    draggingInside = false;
+                    draggingOutside = false;
             }
             return false;
         }
@@ -212,6 +213,7 @@ public class BouncyScrollView extends ScrollView {
     @Override
     protected void onScrollChanged(int l, int t, int oldl, int oldt) {
         super.onScrollChanged(l, t, oldl, oldt);
+        Log.d(TAG, "t: " + t + ", oldt: " + oldt);
         if (t == lastT && oldt == lastOldT)
             return;
         lastT = t;
@@ -239,7 +241,14 @@ public class BouncyScrollView extends ScrollView {
     }
 
     public void resetPosition() {
-        viewContainer.scrollTo(0, 1);
+        post(new Runnable() {
+            @Override
+            public void run() {
+                viewContainer.setVisibility(INVISIBLE);
+                viewContainer.scrollTo(0, 1);
+                viewContainer.setVisibility(VISIBLE);
+            }
+        });
     }
 
     public void animateToStartingPosition() {
@@ -247,7 +256,7 @@ public class BouncyScrollView extends ScrollView {
         new Handler().post(new Runnable() {
             @Override
             public void run() {
-                if(viewAnimator != null) viewAnimator.start();
+                if (viewAnimator != null) viewAnimator.start();
             }
         });
     }
@@ -268,15 +277,20 @@ public class BouncyScrollView extends ScrollView {
             return;
 
         int scrollY = getScrollY();
-        int bottomThreshold = (int) ((customView == null ? 0 : customView.getHeight()) * scrollAssistThreshold);
-        int topThreshold = getHeight() - bottomThreshold;
-
         //
-        if (scrollY <= bottomThreshold) { // Should scroll down
+        if (scrollY <= getBottomScrollAssistThreshold()) { // Should scroll down
             scrollDownOffscreen();
-        } else if (scrollY >= topThreshold) { // Should scroll up
+        } else if (scrollY >= getTopScrollAssistThreshold()) { // Should scroll up
             scrollUpOffscreen();
         }
+    }
+
+    protected int getBottomScrollAssistThreshold() {
+        return (int) ((customView == null ? 0 : customView.getHeight()) * scrollAssistThreshold);
+    }
+
+    protected int getTopScrollAssistThreshold() {
+        return getHeight() - getBottomScrollAssistThreshold();
     }
 
     protected void scrollUpOffscreen() {
@@ -352,6 +366,10 @@ public class BouncyScrollView extends ScrollView {
         absoluteStartingPosition = (int) ((1 - relativeStartingPosition) * height);
     }
 
+    public float getAbsoluteStartingPosition() {
+        return absoluteStartingPosition;
+    }
+
     public View getCustomView() {
         return customView;
     }
@@ -368,8 +386,13 @@ public class BouncyScrollView extends ScrollView {
         if (this.customView == null || !animate) {
             resetPosition();
             this.customView = customView;
-            viewContainer.removeAllViews();
-            viewContainer.addView(customView);
+            new Handler().post(new Runnable() {
+                @Override
+                public void run() {
+                    viewContainer.removeAllViews();
+                    viewContainer.addView(customView);
+                }
+            });
             animateToStartingPosition();
         } else {
             onScrollStopListener.setPause(true);
@@ -433,7 +456,7 @@ public class BouncyScrollView extends ScrollView {
             @Override
             public void run() {
                 int y = getScrollY();
-                if (y == oldY && !userFingerDown) {
+                if (y == oldY && !userFingerDown && !viewAnimator.isRunning()) {
                     onScrollStopped();
                 } else {
                     oldY = y;
