@@ -31,7 +31,7 @@ public class FadingBouncyScrollView extends BouncyScrollView {
     }
 
     @Override
-    public void setCustomView(View customView) {
+    public void setCustomView(View customView, boolean animation, int duration) {
         super.setCustomView(customView);
         this.customView = customView;
     }
